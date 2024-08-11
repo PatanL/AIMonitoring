@@ -1,7 +1,7 @@
 import sys
 import mss
 import time
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel, QInputDialog, QLineEdit
+from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QInputDialog, QLineEdit, QSpinBox
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QPixmap, QImage
 from PIL import Image
@@ -9,7 +9,7 @@ import os
 import base64
 import requests
 from dotenv import load_dotenv
-from plyer import notification
+# from plyer import notification
 import subprocess
 
 # Load environment variables
@@ -55,8 +55,8 @@ class DistractionAnalyzer:
             return base64.b64encode(image_file.read()).decode('utf-8')
 
     def analyze(self):
-        # image_path = os.path.join(os.getcwd(), "debug_images", "capture_latest.png")
-        image_path = "/Users/patrickliu/Desktop/Startups/AI Accountability Partner/debug_images/image.png"
+        image_path = os.path.join(os.getcwd(), "debug_images", "capture_latest.png")
+        # image_path = "/Users/patrickliu/Desktop/Startups/AI Accountability Partner/debug_images/image.png"
         base64_image = self.encode_image(image_path)
 
         headers = {
@@ -107,6 +107,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
 
+        # Interval setting
+        interval_layout = QHBoxLayout()
+        interval_label = QLabel("Capture Interval (seconds):")
+        self.interval_spinbox = QSpinBox()
+        self.interval_spinbox.setRange(5, 3600)
+        self.interval_spinbox.setValue(30)
+        interval_layout.addWidget(interval_label)
+        interval_layout.addWidget(self.interval_spinbox)
+        layout.addLayout(interval_layout)
+
         self.start_button = QPushButton("Start Monitoring")
         self.start_button.clicked.connect(self.toggle_monitoring)
         layout.addWidget(self.start_button)
@@ -123,17 +133,18 @@ class MainWindow(QMainWindow):
 
     def toggle_monitoring(self):
         if self.start_button.text() == "Start Monitoring":
-            interval, ok = QInputDialog.getInt(self, "Set Interval", "Enter capture interval in seconds:", 30, 5, 3600)
-            if ok:
-                self.capture_thread.interval = interval
-                self.capture_thread.start()
-                self.start_button.setText("Stop Monitoring")
-                self.status_label.setText("Status: Monitoring")
+            interval = self.interval_spinbox.value()
+            self.capture_thread.interval = interval
+            self.capture_thread.start()
+            self.start_button.setText("Stop Monitoring")
+            self.status_label.setText(f"Status: Monitoring (Interval: {interval}s)")
+            self.interval_spinbox.setEnabled(False)
         else:
             self.capture_thread.stop()
             self.capture_thread.wait()
             self.start_button.setText("Start Monitoring")
             self.status_label.setText("Status: Not monitoring")
+            self.interval_spinbox.setEnabled(True)
 
     def process_capture(self, pixmap):
         scaled_pixmap = pixmap.scaled(300, 200, Qt.AspectRatioMode.KeepAspectRatio)
