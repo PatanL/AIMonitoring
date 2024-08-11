@@ -1,0 +1,9 @@
+mss
+numpy
+PyQt6
+pytesseract
+Pillow
+openai
+transformers
+python-dotenv
+subprocess
