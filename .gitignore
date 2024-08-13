@@ -5,3 +5,6 @@
 *.cubin
 *.fatbin
 .env
+venv/*
+aimonitor/*
+aimonitor/

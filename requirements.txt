@@ -6,4 +6,3 @@ Pillow
 openai
 transformers
 python-dotenv
-subprocess
