@@ -57,63 +57,47 @@ class ScreenCaptureThread(QThread):
     def stop(self):
         self.running = False
 
+
 class DistractionAnalyzer(QObject):
     analysis_complete = pyqtSignal(bool)
     def __init__(self):
         super().__init__()
-        self.api_key = os.getenv('OPENAI_API_KEY')
-        if not self.api_key:
-            raise ValueError("OpenAI API key not found in environment variables")
 
     def encode_image(self, image_path):
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
+    def ask_llava(self, prompt, image_path):
+        base64_image = self.encode_image(image_path)
+        
+        response = requests.post('http://localhost:11434/api/generate',
+            json={
+                'model': 'llava',
+                'prompt': prompt,
+                'images': [base64_image],
+                'stream': False,
+                'options': {
+                    'temperature': 0
+                }
+            })
+        
+        if response.status_code == 200:
+            return response.json()['response']
+        else:
+            return f"Error: {response.status_code}, {response.text}"
 
     def analyze(self, qimage):
         image_path = os.path.join(os.getcwd(), "debug_images", "capture_latest.png")
-        base64_image = self.encode_image(image_path)
-
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
-
-        prompt = "Describe this image"
-
-        payload = {
-            "model": "gpt-4-vision-preview",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{base64_image}",
-                                "detail": "low"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": 300
-        }
+        question = "Is this person coding in this image? Reply with one word: 'Yes' or 'No'"
 
         try:
-            # response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-            # response.raise_for_status()
-            # response_json = response.json()
-            # print(response_json)
-            # For demonstration, always emit True. In real use, you'd analyze the response.
-            result = True
-            self.analysis_complete.emit(result)
-        except requests.RequestException as e:
-            print(f"Error in API request: {e}")
+            answer = self.ask_llava(question, image_path)
+            print(f"LLaVA response: {answer}")
+            is_distracted = answer.strip().lower() == "no"
+            self.analysis_complete.emit(is_distracted)
+        except Exception as e:
+            print(f"Error in LLaVA analysis: {e}")
             self.analysis_complete.emit(False)
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
