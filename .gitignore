@@ -8,3 +8,4 @@
 venv/*
 aimonitor/*
 aimonitor/
+debug_images/
