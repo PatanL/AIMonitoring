@@ -12,6 +12,9 @@ import os
 import base64
 import requests
 from dotenv import load_dotenv
+from gtts import gTTS
+from playsound import playsound
+from threading import Thread
 
 # Load environment variables
 load_dotenv()
@@ -99,6 +102,19 @@ class DistractionAnalyzer(QObject):
             self.analysis_complete.emit(False)
 
 
+class AudioThread(QThread):
+    def __init__(self, text, audio_path = "distraction_alert.mp3"):
+        super().__init__()
+        self.text = text
+        self.audio_path = audio_path
+
+    def run(self):
+        # tts = gTTS(text=self.text, lang='en')
+        # tts.save("distraction_alert.mp3")
+        playsound("/Users/patrickliu/Desktop/Startups/AIMonitoring/Radar.mp3")
+        # playsound("neets-scarlett-johansson.mp3")
+        # os.remove("distraction_alert.mp3")  # Clean up the audio file
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -185,6 +201,11 @@ class MainWindow(QMainWindow):
             print("You seem distracted!")
             self.show_notification("Distraction Alert", "You seem to be distracted. Focus on your work!")
             self.show_distraction_popup()
+            self.play_audio_alert("You seem distracted! Back to work!")
+    
+    def play_audio_alert(self, message):
+        self.audio_thread = AudioThread(message, "distraction_alert.mp3")
+        self.audio_thread.start()
 
     def show_notification(self, title, message):
         self.tray_icon.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 3000)
