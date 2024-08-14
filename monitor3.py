@@ -3,7 +3,7 @@ import mss
 import time
 import threading
 import rumps
-from PyQt6.QtWidgets import QDialog, QApplication, QMainWindow, QPushButton, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QSystemTrayIcon, QMenu
+from PyQt6.QtWidgets import QDialog, QApplication, QMainWindow, QPushButton, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QLineEdit, QSystemTrayIcon, QMenu
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer, QObject
 from PyQt6.QtGui import QPixmap, QImage, QIcon
 from PIL import Image
@@ -63,8 +63,9 @@ class ScreenCaptureThread(QThread):
 
 class DistractionAnalyzer(QObject):
     analysis_complete = pyqtSignal(bool)
-    def __init__(self):
+    def __init__(self, task=""):
         super().__init__()
+        self.task = task
 
     def encode_image(self, image_path):
         with open(image_path, "rb") as image_file:
@@ -90,7 +91,8 @@ class DistractionAnalyzer(QObject):
 
     def analyze(self, qimage):
         image_path = os.path.join(os.getcwd(), "debug_images", "capture_latest.png")
-        question = "Is this person coding in this image? Reply with one word: 'Yes' or 'No'"
+        question = f"Is this person doing this: {self.task}, in the image? Reply with one word: 'Yes' or 'No'"
+        # question = "Is this person scrolling on social media, playing games, watching livestream, reading manga/comics, in the image? Reply with: 'Yes' or 'No'"
 
         try:
             answer = self.ask_llava(question, image_path)
@@ -135,6 +137,21 @@ class MainWindow(QMainWindow):
         interval_layout.addWidget(self.interval_spinbox)
         layout.addLayout(interval_layout)
 
+        # Task input field and lock button
+        task_layout = QHBoxLayout()
+        task_label = QLabel("Task:")
+        self.task_input = QLineEdit()
+        self.task_input.setPlaceholderText("e.g., coding, writing, etc.")
+        task_layout.addWidget(task_label)
+        task_layout.addWidget(self.task_input)
+        self.lock_task_button = QPushButton("Lock Task")
+        self.lock_task_button.clicked.connect(self.toggle_task_lock)
+        task_layout.addWidget(self.lock_task_button)
+        layout.addLayout(task_layout)
+
+        self.task_lock_status_label = QLabel("Task Status: Unlocked")
+        layout.addWidget(self.task_lock_status_label)
+
         self.start_button = QPushButton("Start Monitoring")
         self.start_button.clicked.connect(self.toggle_monitoring)
         layout.addWidget(self.start_button)
@@ -142,19 +159,16 @@ class MainWindow(QMainWindow):
         self.image_label = QLabel()
         layout.addWidget(self.image_label)
 
-        self.status_label = QLabel("Status: Not monitoring")
-        layout.addWidget(self.status_label)
+        # Separate status labels
+        self.monitoring_status_label = QLabel("Status: Not monitoring")
+        layout.addWidget(self.monitoring_status_label)
+
 
         self.capture_thread = None
-        self.analyzer = DistractionAnalyzer()
-        self.analyzer.analysis_complete.connect(self.handle_analysis_result)
+        self.analyzer = None
+        self.task_locked = False
 
         # Initialize the rumps notification app
-        # self.notification_app = NotificationApp()
-        # self.notification_thread = threading.Thread(target=self.notification_app.run)
-        # self.notification_thread.start()
-        # Remove the rumps notification app initialization
-        # Instead, initialize QSystemTrayIcon
         self.tray_icon = QSystemTrayIcon(self)
         self.tray_icon.setIcon(QIcon("/Users/patrickliu/Desktop/Startups/AIMonitoring/debug_images/image.png"))  # Replace with your icon path
         self.tray_menu = QMenu()
@@ -167,16 +181,25 @@ class MainWindow(QMainWindow):
 
     def toggle_monitoring(self):
         if self.start_button.text() == "Start Monitoring":
+            task = self.task_input.text().strip()
+            if not task:
+                self.monitoring_status_label.setText("Status: Please enter a task before starting.")
+                return
+
             interval = self.interval_spinbox.value()
+            self.analyzer = DistractionAnalyzer(task)  # Initialize with the task
+            self.analyzer.analysis_complete.connect(self.handle_analysis_result)  # Connect the signal
+
             self.capture_thread = ScreenCaptureThread(interval)
             self.capture_thread.captured.connect(self.process_capture)
             self.capture_thread.start()
+
             self.start_button.setText("Stop Monitoring")
-            self.status_label.setText(f"Status: Monitoring (Interval: {interval}s)")
+            self.monitoring_status_label.setText(f"Status: Monitoring (Interval: {interval}s)")
             self.interval_spinbox.setEnabled(False)
         else:
             self.start_button.setEnabled(False)
-            self.status_label.setText("Status: Stopping monitoring...")
+            self.monitoring_status_label.setText("Status: Stopping monitoring...")
             QTimer.singleShot(100, self.stop_monitoring)
 
     def stop_monitoring(self):
@@ -186,10 +209,41 @@ class MainWindow(QMainWindow):
             if self.capture_thread.isRunning():
                 self.capture_thread.terminate()  # Force termination if thread doesn't stop
             self.capture_thread = None
+
         self.start_button.setText("Start Monitoring")
-        self.status_label.setText("Status: Not monitoring")
+        self.monitoring_status_label.setText("Status: Not monitoring")
         self.interval_spinbox.setEnabled(True)
         self.start_button.setEnabled(True)
+
+    def toggle_task_lock(self):
+        if not self.task_locked:
+            # Lock the task input
+            self.task_input.setEnabled(False)
+            self.lock_task_button.setText("Unlock Task")
+            self.task_locked = True
+
+            # Get the current task from the input field
+            task = self.task_input.text().strip()
+
+            if not task:
+                self.task_lock_status_label.setText("Task Status: Please enter a task before locking.")
+                return
+
+            # Reinitialize the DistractionAnalyzer with the new task
+            self.analyzer = DistractionAnalyzer(task)
+            self.analyzer.analysis_complete.connect(self.handle_analysis_result)  # Reconnect the signal
+
+            # Update status to reflect the task is locked
+            self.task_lock_status_label.setText(f"Task Status: Locked with task '{task}'")
+        else:
+            # Unlock the task input
+            self.task_input.setEnabled(True)
+            self.lock_task_button.setText("Lock Task")
+            self.task_locked = False
+
+            # Optionally, update status to reflect the task is unlocked
+            self.task_lock_status_label.setText("Task Status: Unlocked. You can edit the task now.")
+
 
     def process_capture(self, qimage):
         scaled_pixmap = QPixmap.fromImage(qimage).scaled(300, 200, Qt.AspectRatioMode.KeepAspectRatio)
