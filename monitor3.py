@@ -214,7 +214,6 @@ class AudioThread(QThread):
         playsound("Radar.mp3")
         # Play the generated audio
         playsound(self.audio_path)
-        # playsound("neets-scarlett-johansson.mp3")
         # os.remove("distraction_alert.mp3")  # Clean up the audio file
 
 class ReflectionDialog(QDialog):
