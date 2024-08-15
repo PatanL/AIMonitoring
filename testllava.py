@@ -27,8 +27,9 @@ def ask_llava(prompt, image_path):
         return f"Error: {response.status_code}, {response.text}"
 
 # Example usage
-image_path = '/Users/patrickliu/Desktop/Startups/AIMonitoring/debug_images/capture_latest.png'
-question = "Is this person coding in this image, reply with 'Yes' or 'No'"
-
+image_path = '/Users/patrickliu/Desktop/Startups/AIMonitoring/readthistext.png'
+question = "In this image, is the user doing anything related to this: coding or writing or planning tasks? Reply with 'yes' or 'no' if they are definetely distracted. and reasoning"
+question = "Describe what this user in this image is doing briefly (5 words max) from these options: reading book, learning, coding, watching youtube video, watching tiktok, browsing social media, reading manga, gaming, watching live stream, chatting online."
+question = "Read the text in this image"
 answer = ask_llava(question, image_path)
 print(answer)
