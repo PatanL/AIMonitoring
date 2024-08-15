@@ -108,48 +108,6 @@ class ScreenCaptureThread(QThread):
         self.running = False
         self.wait(2000)  # Wait for up to 2 seconds for the thread to finish
 
-
-# class DistractionAnalyzer(QObject):
-#     analysis_complete = pyqtSignal(bool)
-#     def __init__(self, task=""):
-#         super().__init__()
-#         self.task = task
-
-#     def encode_image(self, image_path):
-#         with open(image_path, "rb") as image_file:
-#             return base64.b64encode(image_file.read()).decode('utf-8')
-#     def ask_llava(self, prompt, image_path):
-#         base64_image = self.encode_image(image_path)
-        
-#         response = requests.post('http://localhost:11434/api/generate',
-#             json={
-#                 'model': 'llava',
-#                 'prompt': prompt,
-#                 'images': [base64_image],
-#                 'stream': False,
-#                 'options': {
-#                     'temperature': 0
-#                 }
-#             })
-        
-#         if response.status_code == 200:
-#             return response.json()['response']
-#         else:
-#             return f"Error: {response.status_code}, {response.text}"
-#     def analyze(self, qimage):
-#             image_path = os.path.join(os.getcwd(), "debug_images", "capture_latest.png")
-#             question = f"Is this person doing this: {self.task}, in the image? Reply with one word: 'Yes' or 'No'"
-#             # question = "Is this person scrolling on social media, playing games, watching livestream, reading manga/comics, in the image? Reply with: 'Yes' or 'No'"
-
-#             try:
-#                 answer = self.ask_llava(question, image_path)
-#                 print(f"LLaVA response: {answer}")
-#                 is_distracted = answer.strip().lower() == "no"
-#                 self.analysis_complete.emit(is_distracted)
-#             except Exception as e:
-#                 print(f"Error in LLaVA analysis: {e}")
-#                 self.analysis_complete.emit(False)
-
 class DistractionAnalyzer(QThread):
     analysis_complete = pyqtSignal(bool)
 
@@ -400,10 +358,6 @@ class MainWindow(QMainWindow):
             self.task_lock_status_label.setText("Task Status: Unlocked. You can edit the task now.")
 
 
-    # def process_capture(self, qimage):
-    #     scaled_pixmap = QPixmap.fromImage(qimage).scaled(300, 200, Qt.AspectRatioMode.KeepAspectRatio)
-    #     self.image_label.setPixmap(scaled_pixmap)
-    #     QTimer.singleShot(0, lambda: self.analyzer.analyze(qimage))
     def process_capture(self, qimage):
         scaled_pixmap = QPixmap.fromImage(qimage).scaled(300, 200, Qt.AspectRatioMode.KeepAspectRatio)
         self.image_label.setPixmap(scaled_pixmap)
