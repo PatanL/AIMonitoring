@@ -212,7 +212,7 @@ class AudioThread(QThread):
         # tts = gTTS(text=self.text, lang='en')
         # tts.save(self.audio_path)
         playsound("Radar.mp3")
-        # Play the generated audio
+        # Play the generated audio file
         playsound(self.audio_path)
         # os.remove("distraction_alert.mp3")  # Clean up the audio file
 
