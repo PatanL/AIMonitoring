@@ -211,7 +211,7 @@ class AudioThread(QThread):
     def run(self):
         tts = gTTS(text=self.text, lang='en')
         tts.save(self.audio_path)
-        playsound("radar.mp3")
+        playsound("Radar.mp3")
         # Play the generated audio
         playsound(self.audio_path)
         # playsound("neets-scarlett-johansson.mp3")
