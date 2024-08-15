@@ -8,4 +8,5 @@
 venv/*
 aimonitor/*
 aimonitor/
-debug_images/
+debug_images/*
+testqt.py

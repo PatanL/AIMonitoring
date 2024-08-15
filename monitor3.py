@@ -70,6 +70,12 @@ class DistractionPopup(QDialog):
         # Move the popup to the center of the screen
         self.move(x, y)
 
+        def resizeEvent(self, event):
+            # Re-center the dialog when it is resized
+            self.center_on_screen()
+            super().resizeEvent(event)
+
+
 
 class ScreenCaptureThread(QThread):
     captured = pyqtSignal(QImage)
@@ -205,7 +211,7 @@ class AudioThread(QThread):
     def run(self):
         tts = gTTS(text=self.text, lang='en')
         tts.save(self.audio_path)
-        playsound("Radar.mp3")
+        playsound("radar.mp3")
         # Play the generated audio
         playsound(self.audio_path)
         # playsound("neets-scarlett-johansson.mp3")
