@@ -100,6 +100,7 @@ class ScreenCaptureThread(QThread):
 
     def stop(self):
         self.running = False
+        self.wait(2000)  # Wait for up to 2 seconds for the thread to finish
 
 
 # class DistractionAnalyzer(QObject):
@@ -204,7 +205,7 @@ class AudioThread(QThread):
     def run(self):
         tts = gTTS(text=self.text, lang='en')
         tts.save(self.audio_path)
-        playsound("/Users/patrickliu/Desktop/Startups/AIMonitoring/Radar.mp3")
+        playsound("Radar.mp3")
         # Play the generated audio
         playsound(self.audio_path)
         # playsound("neets-scarlett-johansson.mp3")
@@ -318,7 +319,7 @@ class MainWindow(QMainWindow):
 
         # Initialize the rumps notification app
         self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(QIcon("/Users/patrickliu/Desktop/Startups/AIMonitoring/debug_images/image.png"))  # Replace with your icon path
+        self.tray_icon.setIcon(QIcon("debug_images/image.png"))  # Replace with your icon path
         self.tray_menu = QMenu()
         self.tray_menu.addAction("Exit", self.close)
         self.tray_icon.setContextMenu(self.tray_menu)
@@ -354,9 +355,9 @@ class MainWindow(QMainWindow):
     def stop_monitoring(self):
         if self.capture_thread:
             self.capture_thread.stop()
-            self.capture_thread.wait(2000)  # Wait for up to 2 seconds
-            if self.capture_thread.isRunning():
-                self.capture_thread.terminate()  # Force termination if thread doesn't stop
+            self.capture_thread.wait(3000)  # Wait for up to 3 seconds
+            # if self.capture_thread.isRunning():
+            #     self.capture_thread.terminate()  # Force termination if thread doesn't stop
             self.capture_thread = None
 
         self.start_button.setText("Start Monitoring")
@@ -460,20 +461,6 @@ class MainWindow(QMainWindow):
         self.start_button.setText("Stop Monitoring")
         self.monitoring_status_label.setText(f"Status: Monitoring (Interval: {interval}s)")
         self.interval_spinbox.setEnabled(False)
-
-    def stop_monitoring(self):
-        if self.capture_thread:
-            self.capture_thread.stop()
-            self.capture_thread.wait(2000)  # Wait for up to 2 seconds
-            if self.capture_thread.isRunning():
-                self.capture_thread.terminate()  # Force termination if thread doesn't stop
-            self.capture_thread = None
-
-        self.start_button.setText("Start Monitoring")
-        self.monitoring_status_label.setText("Status: Not monitoring")
-        self.interval_spinbox.setEnabled(True)
-        self.start_button.setEnabled(True)
-
     
     def play_audio_alert(self, message):
         self.audio_thread = AudioThread(message, "distraction_alert.mp3")
