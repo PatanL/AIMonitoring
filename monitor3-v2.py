@@ -106,7 +106,7 @@ class ScreenCaptureThread(QThread):
 
     def stop(self):
         self.running = False
-        self.wait(2000)  # Wait for up to 2 seconds for the thread to finish
+        self.wait(5000)  # Wait for up to 2 seconds for the thread to finish
 
 class DistractionAnalyzer(QThread):
     analysis_complete = pyqtSignal(bool)
@@ -167,14 +167,16 @@ class AudioThread(QThread):
         self.audio_path = audio_path
 
     def run(self):
-        # tts = gTTS(text=self.text, lang='en')
-        # tts.save(self.audio_path)
+        tts = gTTS(text=self.text, lang='en')
+        tts.save(self.audio_path)
         playsound("Radar.mp3")
         # Play the generated audio file
         playsound(self.audio_path)
         # os.remove("distraction_alert.mp3")  # Clean up the audio file
 
 class ReflectionDialog(QDialog):
+    refocus_clicked = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent, Qt.WindowType.WindowStaysOnTopHint | 
                                 Qt.WindowType.FramelessWindowHint | 
@@ -201,7 +203,8 @@ class ReflectionDialog(QDialog):
         # Add a button to allow the user to confirm and close the dialog
         confirm_button = QPushButton("I'm ready to refocus!")
         confirm_button.setStyleSheet("font-size: 16px;")  # Set the font size for the button text
-        confirm_button.clicked.connect(self.accept)
+        # confirm_button.clicked.connect(self.accept)
+        confirm_button.clicked.connect(self.on_refocus_clicked)
         layout.addWidget(confirm_button)
 
         self.setLayout(layout)
@@ -223,8 +226,12 @@ class ReflectionDialog(QDialog):
         self.center_on_screen()
         super().resizeEvent(event)
 
-    def closeEvent(self, event):
-        event.ignore()
+    # def closeEvent(self, event):
+    #     event.ignore()
+
+    def on_refocus_clicked(self):
+        self.refocus_clicked.emit()
+        self.accept()
 
 
 
@@ -318,9 +325,9 @@ class MainWindow(QMainWindow):
     def stop_monitoring(self):
         if self.capture_thread:
             self.capture_thread.stop()
-            self.capture_thread.wait(3000)  # Wait for up to 3 seconds
-            # if self.capture_thread.isRunning():
-            #     self.capture_thread.terminate()  # Force termination if thread doesn't stop
+            self.capture_thread.wait(5000)  # Wait for up to 3 seconds
+            if self.capture_thread.isRunning():
+                self.capture_thread.terminate()  # Force termination if thread doesn't stop
             self.capture_thread = None
         
         if self.analyzer and self.analyzer.isRunning():
@@ -394,19 +401,27 @@ class MainWindow(QMainWindow):
 
             message = random.choice(messages)
 
+            
             self.show_distraction_popup(message)
             self.play_audio_alert(message)
 
-            self.stop_monitoring()
+            # self.stop_monitoring()
 
-            reflection_dialog = ReflectionDialog()
-            if reflection_dialog.exec():
-                print(f"User reflection: {reflection_dialog.reflection_input.text()}")
+            # reflection_dialog = ReflectionDialog()
+            # if reflection_dialog.exec():
+            #     print(f"User reflection: {reflection_dialog.reflection_input.text()}")
+            #     self.show_notification("Great!", "Let's get back to work!")
+
+            #     self.hide_distraction_popup()
+
+            #     self.start_monitoring()
+            if not self.reflection_popup:
+                self.reflection_popup = ReflectionDialog()
+                self.reflection_popup.refocus_clicked.connect(self.hide_distraction_popup)
+            if self.reflection_popup.exec():
+                print(f"User reflection: {self.reflection_popup.reflection_input.text()}")
                 self.show_notification("Great!", "Let's get back to work!")
 
-                self.hide_distraction_popup()
-
-                self.start_monitoring()
     def start_monitoring(self):
         task = self.task_input.text().strip()
         if not task:
@@ -440,7 +455,7 @@ class MainWindow(QMainWindow):
     def hide_distraction_popup(self):
         if self.distraction_popup:
             self.distraction_popup.hide()
-    def show_reflection_popup(self):
+    def show_reflection_popup(self): # not used
         # Create and show the reflection dialog
         reflection_dialog = ReflectionDialog(self)
         if reflection_dialog.exec():  # This will block until the user closes the dialog
@@ -452,7 +467,7 @@ class MainWindow(QMainWindow):
 
             # Resume monitoring
             self.start_monitoring()
-    def hide_reflection_popup(self):
+    def hide_reflection_popup(self): # not used
         if self.reflection_popup:
             self.reflection_popup.hide()
 
