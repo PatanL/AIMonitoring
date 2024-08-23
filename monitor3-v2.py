@@ -5,8 +5,8 @@ import random
 import threading
 import rumps
 from PyQt6.QtWidgets import QDialog, QApplication, QMainWindow, QPushButton, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QLineEdit, QSystemTrayIcon, QMenu
-from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer, QObject
-from PyQt6.QtGui import QPixmap, QImage, QIcon
+from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer, QRectF
+from PyQt6.QtGui import QPixmap, QImage, QIcon, QColor, QPainter, QPainterPath, QPen, QBrush
 from PIL import Image
 import io
 import os
@@ -15,68 +15,108 @@ import requests
 from dotenv import load_dotenv
 from gtts import gTTS
 from playsound import playsound
-from threading import Thread
 import datetime
 
 # Load environment variables
 load_dotenv()
 
+# class DistractionPopup(QDialog):
+#     def __init__(self, message, parent=None):
+#         super().__init__(parent, Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
+#         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+#         self.setModal(False)
+
+#         self.resize(400, 200)
+
+#         self.setStyleSheet("""
+#             QLabel {
+#                 color: white;
+#                 font-size: 20px;
+#                 font-family: 'Helvetica Neue', sans-serif;
+#             }
+#         """)
+
+#         # Layout for the message
+#         layout = QVBoxLayout()
+#         self.messageLabel = QLabel(message)
+#         self.messageLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+#         layout.addWidget(self.messageLabel)
+#         self.setLayout(layout)
+
+#         self.center_on_screen()
+
+#     def center_on_screen(self):
+#         # Get the screen geometry
+#         screen_geometry = QApplication.primaryScreen().geometry()
+
+#         # Calculate the center position
+#         x = (screen_geometry.width() - self.width()) // 2
+#         y = (screen_geometry.height() - self.height()) * 1//4
+
+#         # Move the popup to the center of the screen
+#         self.move(x, y)
+
+#     def paintEvent(self, event):
+#         painter = QPainter(self)
+#         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+#         # Draw the background with rounded corners
+#         path = QPainterPath()
+#         path.addRoundedRect(QRectF(self.rect()), 15, 15)
+#         painter.setClipPath(path)
+
+#         # Fill with the background color
+#         painter.fillRect(self.rect(), QBrush(QColor(255, 107, 107, 80)))
+        
+#         painter.setPen(QPen(QColor(255, 107, 107, 100), 1))
+#         painter.drawPath(path)
+
+#     def resizeEvent(self, event):
+#         self.center_on_screen()
+#         super().resizeEvent(event)
+
 class DistractionPopup(QDialog):
     def __init__(self, message, parent=None):
         super().__init__(parent, Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(False)
+        self.resize(400, 200)
+        self.setStyleSheet("""
+            QLabel {
+                color: #FFF5E6;
+                font-size: 24px;
+                font-family: 'Helvetica Neue', sans-serif;
+                font-weight: 300;
+            }
+        """)
 
-        # Set the size of the popup
-        self.resize(400, 200) 
-
-        
-        styles = [
-            "font-size: 24px; color: red; font-weight: bold; background-color: black;",
-            "font-size: 24px; color: blue; background-color: black;",
-            "font-size: 24px; color: orange; background-color: black;",
-            "font-size: 24px; color: white; background-color: red;",
-            "font-size: 24px; color: black; font-weight: bold; background-color: red;",
-            "font-size: 24px; color: orange; background-color: red;",
-            "font-size: 24px; color: white; background-color: black;",
-            "font-size: 28px; color: white; font-weight: bold; background-color: purple;",
-            "font-size: 24px; color: red; background-color: black;",
-            "font-size: 24px; color: white; background-color: purple;",
-            "font-size: 24px; color: orange; background-color: black;"
-        ]
-
-        style = random.choice(styles)
-         # Set the background color of the entire dialog to be the background color of the text
-        self.setStyleSheet(style.split(";")[-2] + ";") 
-
-        # Create a layout and message
         layout = QVBoxLayout()
-
-
-        
-        message = QLabel(message)
-        message.setStyleSheet(style)  # Increase the font size for visibility
-        layout.addWidget(message, alignment=Qt.AlignmentFlag.AlignCenter)  # Center the text within the popup
+        self.messageLabel = QLabel(message)
+        self.messageLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.messageLabel.setWordWrap(True)
+        layout.addWidget(self.messageLabel)
         self.setLayout(layout)
-
         self.center_on_screen()
 
     def center_on_screen(self):
-        # Get the screen geometry
         screen_geometry = QApplication.primaryScreen().geometry()
-
-        # Calculate the center position
         x = (screen_geometry.width() - self.width()) // 2
-        y = (screen_geometry.height() - self.height()) * 1//4
-
-        # Move the popup to the center of the screen
+        y = (screen_geometry.height() - self.height()) // 3
         self.move(x, y)
 
-        def resizeEvent(self, event):
-            # Re-center the dialog when it is resized
-            self.center_on_screen()
-            super().resizeEvent(event)
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 10, 10)
+        painter.setClipPath(path)
+        painter.fillPath(path, QColor(255, 103, 0, 200))  # Soft orange color
+        painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
+        painter.drawPath(path)
 
-
+    def resizeEvent(self, event):
+        self.center_on_screen()
+        super().resizeEvent(event)
 
 class ScreenCaptureThread(QThread):
     captured = pyqtSignal(QImage)
@@ -126,7 +166,7 @@ class DistractionAnalyzer(QThread):
             # question = f"In this image, is this person doing anything related to: {self.task}? Reply with one word: 'Yes' if they are or 'No' if they are definetely distracted."
             question = "Describe what this person in this image is doing briefly (5 words max) from these options: being productive, learning, coding, watching educational youtube video, watching uneducational youtube video, scrolling twitter, reading comics, gaming, playing chess, writing."
             try:
-                blacklisted_words = ["comics", "gaming", "live stream", "watching shortform video", "uneducational", "twitch"]
+                # blacklisted_words = ["comics", "gaming", "live stream", "watching shortform video", "uneducational", "twitch"]
                 # answer = self.ask_llava(question, self.image_path)
                 # print(f"LLaVA response: {answer}")
 
@@ -176,66 +216,80 @@ class AudioThread(QThread):
             # os.remove("distraction_alert.mp3")  # Clean up the audio file
         else:
             playsound(self.audio_path)
+
 class ReflectionDialog(QDialog):
     refocus_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
-        super().__init__(parent, Qt.WindowType.WindowStaysOnTopHint | 
-                                Qt.WindowType.FramelessWindowHint | 
-                                Qt.WindowType.WindowStaysOnTopHint)
-
-        self.setModal(False) # Make sure it's modal so it blocks interaction with other windows
-
-        self.setWindowTitle("Reflection Time")
-        self.setGeometry(100, 100, 400, 200)
+        super().__init__(parent, Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(False)
+        self.resize(450, 280)
+        self.setStyleSheet("""
+            QLabel, QLineEdit, QPushButton {
+                color: #FFF5E6;
+                font-size: 20px;
+                font-family: 'Helvetica Neue', sans-serif;
+                font-weight: 300;
+            }
+            QLineEdit {
+                background-color: rgba(255, 255, 255, 20);
+                border: none;
+                border-bottom: 1px solid rgba(255, 255, 255, 50);
+                padding: 8px;
+            }
+            QPushButton {
+                background-color: rgba(255, 255, 255, 20);
+                border: 1px solid rgba(255, 255, 255, 50);
+                border-radius: 5px;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 30);
+            }
+        """)
 
         layout = QVBoxLayout()
-
-        # Add a reflection message
-        reflection_label = QLabel("You seemed distracted. What caused the distraction and how can you refocus?")
-        reflection_label.setStyleSheet("font-size: 18px; font-weight: bold;")  
+        
+        reflection_label = QLabel("What caused the distraction?")
+        reflection_label.setWordWrap(True)
+        reflection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(reflection_label)
 
-        # Text input for the user to reflect on their distraction
         self.reflection_input = QLineEdit()
-        self.reflection_input.setPlaceholderText("Type your reflection here...")
-        self.reflection_input.setStyleSheet("font-size: 16px;")  # Set the font size for the text input
+        self.reflection_input.setPlaceholderText("Reflect on your distraction...")
         layout.addWidget(self.reflection_input)
 
-        # Add a button to allow the user to confirm and close the dialog
-        confirm_button = QPushButton("I'm ready to refocus!")
-        confirm_button.setStyleSheet("font-size: 16px;")  # Set the font size for the button text
-        # confirm_button.clicked.connect(self.accept)
+        confirm_button = QPushButton("Refocus")
         confirm_button.clicked.connect(self.on_refocus_clicked)
-        layout.addWidget(confirm_button)
+        layout.addWidget(confirm_button, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.setLayout(layout)
         self.center_on_screen()
 
     def center_on_screen(self):
-        # Get the screen geometry
         screen_geometry = QApplication.primaryScreen().geometry()
-
-        # Calculate the center position
         x = (screen_geometry.width() - self.width()) // 2
-        y = (screen_geometry.height() - self.height()) // 2
-
-        # Move the popup to the center of the screen
+        y = (screen_geometry.height() - self.height()) * 2 // 3
         self.move(x, y)
-        
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()), 10, 10)
+        painter.setClipPath(path)
+        painter.fillPath(path, QColor(230, 90, 90, 200))  # Soft red color
+        painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
+        painter.drawPath(path)
+
     def resizeEvent(self, event):
-        # Re-center the dialog when it is resized
         self.center_on_screen()
         super().resizeEvent(event)
-
-    # def closeEvent(self, event):
-    #     event.ignore()
 
     def on_refocus_clicked(self):
         self.refocus_clicked.emit()
         self.accept()
-
-
 
 class MainWindow(QMainWindow):
     def __init__(self):
