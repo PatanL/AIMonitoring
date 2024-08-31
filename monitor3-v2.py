@@ -2,13 +2,10 @@ import sys
 import mss
 import time
 import random
-import threading
-import rumps
 from PyQt6.QtWidgets import QDialog, QApplication, QMainWindow, QPushButton, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QLineEdit, QSystemTrayIcon, QMenu
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer, QRectF
-from PyQt6.QtGui import QPixmap, QImage, QIcon, QColor, QPainter, QPainterPath, QPen, QBrush
+from PyQt6.QtGui import QPixmap, QImage, QIcon, QColor, QPainter, QPainterPath, QPen
 from PIL import Image
-import io
 import os
 import base64
 import requests
@@ -20,61 +17,6 @@ import datetime
 # Load environment variables
 load_dotenv()
 
-# class DistractionPopup(QDialog):
-#     def __init__(self, message, parent=None):
-#         super().__init__(parent, Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
-#         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-#         self.setModal(False)
-
-#         self.resize(400, 200)
-
-#         self.setStyleSheet("""
-#             QLabel {
-#                 color: white;
-#                 font-size: 20px;
-#                 font-family: 'Helvetica Neue', sans-serif;
-#             }
-#         """)
-
-#         # Layout for the message
-#         layout = QVBoxLayout()
-#         self.messageLabel = QLabel(message)
-#         self.messageLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-#         layout.addWidget(self.messageLabel)
-#         self.setLayout(layout)
-
-#         self.center_on_screen()
-
-#     def center_on_screen(self):
-#         # Get the screen geometry
-#         screen_geometry = QApplication.primaryScreen().geometry()
-
-#         # Calculate the center position
-#         x = (screen_geometry.width() - self.width()) // 2
-#         y = (screen_geometry.height() - self.height()) * 1//4
-
-#         # Move the popup to the center of the screen
-#         self.move(x, y)
-
-#     def paintEvent(self, event):
-#         painter = QPainter(self)
-#         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-#         # Draw the background with rounded corners
-#         path = QPainterPath()
-#         path.addRoundedRect(QRectF(self.rect()), 15, 15)
-#         painter.setClipPath(path)
-
-#         # Fill with the background color
-#         painter.fillRect(self.rect(), QBrush(QColor(255, 107, 107, 80)))
-        
-#         painter.setPen(QPen(QColor(255, 107, 107, 100), 1))
-#         painter.drawPath(path)
-
-#     def resizeEvent(self, event):
-#         self.center_on_screen()
-#         super().resizeEvent(event)
-
 class DistractionPopup(QDialog):
     def __init__(self, message, parent=None):
         super().__init__(parent, Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
@@ -84,7 +26,7 @@ class DistractionPopup(QDialog):
         self.setStyleSheet("""
             QLabel {
                 color: #FFF5E6;
-                font-size: 24px;
+                font-size: 20px;
                 font-family: 'Helvetica Neue', sans-serif;
                 font-weight: 300;
             }
@@ -164,15 +106,14 @@ class DistractionAnalyzer(QThread):
         # Perform the analysis in this method
         if self.image_path is not None:
             # question = f"In this image, is this person doing anything related to: {self.task}? Reply with one word: 'Yes' if they are or 'No' if they are definetely distracted."
-            question = "Describe what this person in this image is doing briefly (5 words max) from these options: being productive, learning, coding, watching educational youtube video, watching uneducational youtube video, scrolling twitter, reading comics, gaming, playing chess, writing."
+            question = "Describe what this person in this image is doing briefly (5 words max) from these options: being productive, learning, coding, watching educational youtube video, watching uneducational youtube video, scrolling twitter, reading manga, gaming, playing chess, writing."
             try:
-                # blacklisted_words = ["comics", "gaming", "live stream", "watching shortform video", "uneducational", "twitch"]
-                # answer = self.ask_llava(question, self.image_path)
-                # print(f"LLaVA response: {answer}")
+                blacklisted_words = ["manga", "gaming", "live stream", "watching shortform video", "uneducational", "twitch"]
+                answer = self.ask_llava(question, self.image_path)
+                print(f"LLaVA response: {answer}")
 
-                # # is_distracted = answer.strip().lower() == "no"
-                # is_distracted = any(word in answer.strip().lower() for word in blacklisted_words)
-                is_distracted = True
+                # is_distracted = answer.strip().lower() == "no"
+                is_distracted = any(word in answer.strip().lower() for word in blacklisted_words)
                 self.analysis_complete.emit(is_distracted)
             except Exception as e:
                 print(f"Error in LLaVA analysis: {e}")
@@ -200,7 +141,6 @@ class DistractionAnalyzer(QThread):
     def encode_image(self, image_path):
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode('utf-8')
-
 
 class AudioThread(QThread):
     def __init__(self, text="", audio_path="Radar.mp3"):
@@ -343,7 +283,7 @@ class MainWindow(QMainWindow):
         self.analyzer.analysis_complete.connect(self.handle_analysis_result)  # Connect the signal
         self.task_locked = False
 
-        # Initialize the rumps notification app
+        # Initialize the notification app
         self.tray_icon = QSystemTrayIcon(self)
         self.tray_icon.setIcon(QIcon("debug_images/image.png"))  # Replace with your icon path
         self.tray_menu = QMenu()
@@ -384,9 +324,6 @@ class MainWindow(QMainWindow):
     def stop_monitoring(self):
         if self.capture_thread:
             self.capture_thread.stop()
-            # self.capture_thread.wait(5000)  # Wait for up to 3 seconds
-            # if self.capture_thread.isRunning():
-            #     self.capture_thread.terminate()  # Force termination if thread doesn't stop
             self.capture_thread = None
         
         if self.analyzer and self.analyzer.isRunning():
@@ -522,18 +459,10 @@ class MainWindow(QMainWindow):
     def show_distraction_popup(self, message = "Focus on your work!"):
         self.distraction_popup = DistractionPopup(message)
         self.distraction_popup.show()
-        # Optionally, set a timer to hide the popup after a certain duration
-        # QTimer.singleShot(10000, self.hide_distraction_popup)  # Hide after 10 seconds
 
     def hide_distraction_popup(self):
         if self.distraction_popup:
             self.distraction_popup.hide()
-
-    # def hide_distraction_popup(self):
-    #     if self.distraction_popup:
-    #         self.distraction_popup.close()
-    #         self.distraction_popup.deleteLater()
-    #         self.distraction_popup = None
 
     def closeEvent(self, event):
         # Stop monitoring threads
