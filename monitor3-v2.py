@@ -150,31 +150,15 @@ class ScreenCaptureThread(QThread):
 class DistractionAnalyzer(QThread):
     analysis_complete = pyqtSignal(bool)
 
-    def __init__(self, possible_activities=None, blacklisted_activities=None):
+    def __init__(self, possible_activities=None, blacklisted_words=None):
         super().__init__()
         self.possible_activities = possible_activities or []
-        self.blacklisted_activities = blacklisted_activities or []
+        self.blacklisted_words = blacklisted_words or []
         self.image_path = None
 
     def set_image(self, image_path):
         self.image_path = image_path
 
-    # def run(self):
-    #     # Perform the analysis in this method
-    #     if self.image_path is not None:
-    #         # question = f"In this image, is this person doing anything related to: {self.task}? Reply with one word: 'Yes' if they are or 'No' if they are definetely distracted."
-    #         question = "Describe what this person in this image is doing briefly (5 words max) from these options: being productive, learning, coding, watching educational youtube video, watching uneducational youtube video, scrolling twitter, reading manga, gaming, playing chess, writing."
-    #         try:
-    #             blacklisted_words = ["manga", "gaming", "live stream", "watching shortform video", "uneducational", "twitch"]
-    #             answer = self.ask_llava(question, self.image_path)
-    #             print(f"LLaVA response: {answer}")
-
-    #             # is_distracted = answer.strip().lower() == "no"
-    #             is_distracted = any(word in answer.strip().lower() for word in blacklisted_words)
-    #             self.analysis_complete.emit(is_distracted)
-    #         except Exception as e:
-    #             print(f"Error in LLaVA analysis: {e}")
-    #             self.analysis_complete.emit(False)
     def run(self):
         if self.image_path is not None:
             options = ", ".join(self.possible_activities)
@@ -191,10 +175,10 @@ class DistractionAnalyzer(QThread):
     
     def check_distraction(self, activity):
         activity = activity.lower()
-        for blacklisted in self.blacklisted_activities:
+        for blacklisted in self.blacklisted_words:
             if blacklisted.lower() in activity:
                 return True
-        return False  # If activity is not in blacklisted, consider it not a distraction
+        return False
 
     def ask_llava(self, prompt, image_path):
         base64_image = self.encode_image(image_path)
@@ -314,8 +298,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Distraction Monitor")
         self.setGeometry(100, 100, 600, 200)
 
-        self.default_blacklisted_activities = ["social media", "gaming", "stream"]
-        self.default_possible_activities = ["being productive", "coding", "writing", "learning", "social media", "gaming", "watching livestream"]
+        self.load_config()
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -326,7 +309,8 @@ class MainWindow(QMainWindow):
         interval_label = QLabel("Capture Interval (seconds):")
         self.interval_spinbox = QSpinBox()
         self.interval_spinbox.setRange(5, 3600)
-        self.interval_spinbox.setValue(30)
+        self.interval_spinbox.setValue(self.config['capture_interval'])
+        self.interval_spinbox.valueChanged.connect(self.save_config)
         interval_layout.addWidget(interval_label)
         interval_layout.addWidget(self.interval_spinbox)
         layout.addLayout(interval_layout)
@@ -335,7 +319,8 @@ class MainWindow(QMainWindow):
         possible_layout = QHBoxLayout()
         possible_label = QLabel("Possible Activities:")
         self.possible_input = QLineEdit()
-        self.possible_input.setPlaceholderText(", ".join(self.default_possible_activities))
+        self.possible_input.setText(", ".join(self.config['possible_activities']))
+        self.possible_input.textChanged.connect(self.save_config)
         possible_layout.addWidget(possible_label)
         possible_layout.addWidget(self.possible_input)
         layout.addLayout(possible_layout)
@@ -344,7 +329,8 @@ class MainWindow(QMainWindow):
         blacklisted_layout = QHBoxLayout()
         blacklisted_label = QLabel("Blacklisted Activities:")
         self.blacklisted_input = QLineEdit()
-        self.blacklisted_input.setPlaceholderText(", ".join(self.default_blacklisted_activities))
+        self.blacklisted_input.setText(", ".join(self.config['blacklisted_words']))
+        self.blacklisted_input.textChanged.connect(self.save_config)
         blacklisted_layout.addWidget(blacklisted_label)
         blacklisted_layout.addWidget(self.blacklisted_input)
         layout.addLayout(blacklisted_layout)
@@ -387,21 +373,44 @@ class MainWindow(QMainWindow):
         self.show_stats_button.clicked.connect(self.show_statistics)
         layout.addWidget(self.show_stats_button)
 
+    def load_config(self):
+        try:
+            with open('config.json', 'r') as config_file:
+                self.config = json.load(config_file)
+        except FileNotFoundError:
+            print("Configuration file not found. Using default settings.")
+            self.config = {
+                "capture_interval": 30,
+                "possible_activities": ["being productive", "coding", "writing", "learning", "social media", "gaming", "watching livestream"],
+                "blacklisted_words": ["social media", "gaming", "stream"],
+                "notification_sound": "Radar.mp3",
+                "positive_reinforcement_interval": 1800,
+                "positive_reinforcement_chance": 0.3
+            }
+
+    def save_config(self):
+        self.config['capture_interval'] = self.interval_spinbox.value()
+        self.config['possible_activities'] = [a.strip() for a in self.possible_input.text().split(',') if a.strip()]
+        self.config['blacklisted_words'] = [a.strip() for a in self.blacklisted_input.text().split(',') if a.strip()]
+        
+        with open('config.json', 'w') as config_file:
+            json.dump(self.config, config_file, indent=4)
+                      
     def toggle_monitoring(self):
         if self.start_button.text() == "Start Monitoring":
             possible_activities = [a.strip() for a in self.possible_input.text().split(',') if a.strip()]
-            blacklisted_activities = [a.strip() for a in self.blacklisted_input.text().split(',') if a.strip()]
+            blacklisted_words = [a.strip() for a in self.blacklisted_input.text().split(',') if a.strip()]
 
             if not possible_activities:
-                possible_activities = self.default_possible_activities
+                possible_activities = self.config['possible_activities']
                 self.possible_input.setText(", ".join(possible_activities))
             
-            if not blacklisted_activities:
-                blacklisted_activities = self.default_blacklisted_activities
-                self.blacklisted_input.setText(", ".join(blacklisted_activities))
+            if not blacklisted_words:
+                blacklisted_words = self.config['blacklisted_words']
+                self.blacklisted_input.setText(", ".join(blacklisted_words))
 
             interval = self.interval_spinbox.value()
-            self.analyzer = DistractionAnalyzer(possible_activities, blacklisted_activities)
+            self.analyzer = DistractionAnalyzer(possible_activities, blacklisted_words)
             self.analyzer.analysis_complete.connect(self.handle_analysis_result)
 
             self.capture_thread = ScreenCaptureThread(interval)
@@ -470,11 +479,10 @@ class MainWindow(QMainWindow):
                 print(f"User reflection: {self.reflection_popup.reflection_input.text()}")
                 self.show_notification("Great!", "Let's get back to work!")
         else:
-            time_limit = 1800 # 1800 # 30 minutes
-            if (current_time - self.last_distraction_time).total_seconds() > time_limit:
-                if not self.last_praise_time or (current_time - self.last_praise_time).total_seconds() > time_limit:
+            if (current_time - self.last_distraction_time).total_seconds() > self.config['positive_reinforcement_interval']:
+                if not self.last_praise_time or (current_time - self.last_praise_time).total_seconds() > self.config['positive_reinforcement_interval']:
                     # print(current_time)
-                    # if random.random() < 0.3:  # 30% chance to give praise
+                    # if random.random() < self.config['positive_reinforcement_chance']:  
                     #     self.give_positive_reinforcement()
                     #     self.last_praise_time = current_time 
                     
@@ -506,7 +514,7 @@ class MainWindow(QMainWindow):
     
     def play_audio_alert(self, message):
         self.audio_thread = AudioThread(text=message)
-        self.audio_thread2 = AudioThread(audio_path="Radar.mp3")
+        self.audio_thread2 = AudioThread(audio_path=self.config['notification_sound'])
         self.audio_thread.start()
         self.audio_thread2.start()
 
