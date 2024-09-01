@@ -2,7 +2,7 @@ import sys
 import mss
 import time
 import random
-from PyQt6.QtWidgets import QDialog, QApplication, QMainWindow, QPushButton, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QLineEdit, QSystemTrayIcon, QMenu
+from PyQt6.QtWidgets import QDialog, QApplication, QMainWindow, QPushButton, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QLineEdit, QSystemTrayIcon, QMenu, QMessageBox
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QTimer, QRectF
 from PyQt6.QtGui import QPixmap, QImage, QIcon, QColor, QPainter, QPainterPath, QPen
 from PIL import Image
@@ -13,9 +13,65 @@ from dotenv import load_dotenv
 from gtts import gTTS
 from playsound import playsound
 import datetime
+import json
+from datetime import timedelta
+import os
 
 # Load environment variables
 load_dotenv()
+
+class StatsTracker:
+    def __init__(self, filename='distraction_stats.json'):
+        self.filename = filename
+        self.stats = self.load_stats()
+
+    def load_stats(self):
+        if os.path.exists(self.filename):
+            with open(self.filename, 'r') as f:
+                return json.load(f)
+        return {}
+
+    def save_stats(self):
+        with open(self.filename, 'w') as f:
+            json.dump(self.stats, f, indent=2)
+
+    def update_stats(self, is_distracted, interval):
+        now = datetime.datetime.now()
+        date_key = now.strftime('%Y-%m-%d')
+        hour_key = now.strftime('%Y-%m-%d %H:00')
+
+        if date_key not in self.stats:
+            self.stats[date_key] = {'distractions': 0, 'checks': 0, 'total_time': 0}
+        if hour_key not in self.stats:
+            self.stats[hour_key] = {'distractions': 0, 'checks': 0, 'total_time': 0}
+
+        self.stats[date_key]['checks'] += 1
+        self.stats[date_key]['total_time'] += interval
+        self.stats[hour_key]['checks'] += 1
+        self.stats[hour_key]['total_time'] += interval
+
+        if is_distracted:
+            self.stats[date_key]['distractions'] += 1
+            self.stats[hour_key]['distractions'] += 1
+
+        self.save_stats()
+
+    def get_summary(self):
+        summary = "Distraction Statistics:\n"
+        for key, data in self.stats.items():
+            if ' ' in key:  # Hourly stats
+                summary += f"\nHour: {key}\n"
+            else:  # Daily stats
+                summary += f"\nDate: {key}\n"
+            
+            total_checks = data['checks']
+            if total_checks > 0:
+                distraction_percentage = (data['distractions'] / total_checks) * 100
+                total_time = timedelta(seconds=data['total_time'])
+                summary += f"  Distractions: {data['distractions']}\n"
+                summary += f"  Percentage Distracted: {distraction_percentage:.2f}%\n"
+                summary += f"  Total Time: {total_time}\n"
+        return summary
 
 class DistractionPopup(QDialog):
     def __init__(self, message, parent=None):
@@ -298,6 +354,13 @@ class MainWindow(QMainWindow):
         self.last_praise_time = None  # Track the last time praise was given
         self.last_praise_time2 = datetime.datetime.now()  # Track the last time praise was given
 
+        self.stats_tracker = StatsTracker()
+        
+        # Add a button to show statistics
+        self.show_stats_button = QPushButton("Show Statistics")
+        self.show_stats_button.clicked.connect(self.show_statistics)
+        layout.addWidget(self.show_stats_button)
+        
     def toggle_monitoring(self):
         if self.start_button.text() == "Start Monitoring":
             task = self.task_input.text().strip()
@@ -380,24 +443,14 @@ class MainWindow(QMainWindow):
 
     def handle_analysis_result(self, is_distracted):
         current_time = datetime.datetime.now()
+        interval = self.interval_spinbox.value()
+        self.stats_tracker.update_stats(is_distracted, interval)
+
         if is_distracted:
             print("You seem distracted!")
             self.last_distraction_time = current_time
             self.show_notification("Distraction Alert", "You seem to be distracted. Focus on your work!")
 
-            # messages = [
-            #     "You seem distracted! Focus on your work!",
-            #     "Stay on track! Don't lose your focus.",
-            #     "Stop slacking! Get back to work NOW!",
-            #     "Get back to work! You can do it!",
-            #     "Your goal is important. Stay focused!",
-            #     "No room for weakness. Push through and stay on task!",
-            #     "Every minute you waste is a minute you’ll regret. Focus!",
-            #     "Mediocrity is not an option. Focus harder!",
-            #     "What’s more important than your goals? Nothing. Get back to work!"
-            # ]
-
-            # message = random.choice(messages)
             message = "You seem distracted! Get back to work!"
 
             
@@ -412,9 +465,7 @@ class MainWindow(QMainWindow):
                 self.show_notification("Great!", "Let's get back to work!")
         else:
             time_limit = 1800 # 1800 # 30 minutes
-            # Check if 30 minutes have passed since the last distraction
             if (current_time - self.last_distraction_time).total_seconds() > time_limit:
-                # Check if no praise given in the last 30 minutes
                 if not self.last_praise_time or (current_time - self.last_praise_time).total_seconds() > time_limit:
                     # print(current_time)
                     # if random.random() < 0.3:  # 30% chance to give praise
@@ -463,6 +514,10 @@ class MainWindow(QMainWindow):
     def hide_distraction_popup(self):
         if self.distraction_popup:
             self.distraction_popup.hide()
+
+    def show_statistics(self):
+        stats_summary = self.stats_tracker.get_summary()
+        QMessageBox.information(self, "Distraction Statistics", stats_summary)
 
     def closeEvent(self, event):
         # Stop monitoring threads
