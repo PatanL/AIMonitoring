@@ -150,30 +150,51 @@ class ScreenCaptureThread(QThread):
 class DistractionAnalyzer(QThread):
     analysis_complete = pyqtSignal(bool)
 
-    def __init__(self, task=""):
+    def __init__(self, possible_activities=None, blacklisted_activities=None):
         super().__init__()
-        self.task = task
+        self.possible_activities = possible_activities or []
+        self.blacklisted_activities = blacklisted_activities or []
         self.image_path = None
 
     def set_image(self, image_path):
         self.image_path = image_path
 
+    # def run(self):
+    #     # Perform the analysis in this method
+    #     if self.image_path is not None:
+    #         # question = f"In this image, is this person doing anything related to: {self.task}? Reply with one word: 'Yes' if they are or 'No' if they are definetely distracted."
+    #         question = "Describe what this person in this image is doing briefly (5 words max) from these options: being productive, learning, coding, watching educational youtube video, watching uneducational youtube video, scrolling twitter, reading manga, gaming, playing chess, writing."
+    #         try:
+    #             blacklisted_words = ["manga", "gaming", "live stream", "watching shortform video", "uneducational", "twitch"]
+    #             answer = self.ask_llava(question, self.image_path)
+    #             print(f"LLaVA response: {answer}")
+
+    #             # is_distracted = answer.strip().lower() == "no"
+    #             is_distracted = any(word in answer.strip().lower() for word in blacklisted_words)
+    #             self.analysis_complete.emit(is_distracted)
+    #         except Exception as e:
+    #             print(f"Error in LLaVA analysis: {e}")
+    #             self.analysis_complete.emit(False)
     def run(self):
-        # Perform the analysis in this method
         if self.image_path is not None:
-            # question = f"In this image, is this person doing anything related to: {self.task}? Reply with one word: 'Yes' if they are or 'No' if they are definetely distracted."
-            question = "Describe what this person in this image is doing briefly (5 words max) from these options: being productive, learning, coding, watching educational youtube video, watching uneducational youtube video, scrolling twitter, reading manga, gaming, playing chess, writing."
+            options = ", ".join(self.possible_activities)
+            question = f"Describe what this person in this image is doing briefly (5 words max) from these options: {options}"
             try:
-                blacklisted_words = ["manga", "gaming", "live stream", "watching shortform video", "uneducational", "twitch"]
                 answer = self.ask_llava(question, self.image_path)
                 print(f"LLaVA response: {answer}")
 
-                # is_distracted = answer.strip().lower() == "no"
-                is_distracted = any(word in answer.strip().lower() for word in blacklisted_words)
+                is_distracted = self.check_distraction(answer)
                 self.analysis_complete.emit(is_distracted)
             except Exception as e:
                 print(f"Error in LLaVA analysis: {e}")
                 self.analysis_complete.emit(False)
+    
+    def check_distraction(self, activity):
+        activity = activity.lower()
+        for blacklisted in self.blacklisted_activities:
+            if blacklisted.lower() in activity:
+                return True
+        return False  # If activity is not in blacklisted, consider it not a distraction
 
     def ask_llava(self, prompt, image_path):
         base64_image = self.encode_image(image_path)
@@ -291,7 +312,10 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Distraction Monitor")
-        self.setGeometry(100, 100, 300, 200)
+        self.setGeometry(100, 100, 600, 200)
+
+        self.default_blacklisted_activities = ["social media", "gaming", "stream"]
+        self.default_possible_activities = ["being productive", "coding", "writing", "learning", "social media", "gaming", "watching livestream"]
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -307,20 +331,23 @@ class MainWindow(QMainWindow):
         interval_layout.addWidget(self.interval_spinbox)
         layout.addLayout(interval_layout)
 
-        # Task input field and lock button
-        task_layout = QHBoxLayout()
-        task_label = QLabel("Task:")
-        self.task_input = QLineEdit()
-        self.task_input.setPlaceholderText("e.g., coding, writing, etc.")
-        task_layout.addWidget(task_label)
-        task_layout.addWidget(self.task_input)
-        self.lock_task_button = QPushButton("Lock Task")
-        self.lock_task_button.clicked.connect(self.toggle_task_lock)
-        task_layout.addWidget(self.lock_task_button)
-        layout.addLayout(task_layout)
+        # Possible activities input
+        possible_layout = QHBoxLayout()
+        possible_label = QLabel("Possible Activities:")
+        self.possible_input = QLineEdit()
+        self.possible_input.setPlaceholderText(", ".join(self.default_possible_activities))
+        possible_layout.addWidget(possible_label)
+        possible_layout.addWidget(self.possible_input)
+        layout.addLayout(possible_layout)
 
-        self.task_lock_status_label = QLabel("Task Status: Unlocked")
-        layout.addWidget(self.task_lock_status_label)
+        # Blacklisted activities input
+        blacklisted_layout = QHBoxLayout()
+        blacklisted_label = QLabel("Blacklisted Activities:")
+        self.blacklisted_input = QLineEdit()
+        self.blacklisted_input.setPlaceholderText(", ".join(self.default_blacklisted_activities))
+        blacklisted_layout.addWidget(blacklisted_label)
+        blacklisted_layout.addWidget(self.blacklisted_input)
+        layout.addLayout(blacklisted_layout)
 
         self.start_button = QPushButton("Start Monitoring")
         self.start_button.clicked.connect(self.toggle_monitoring)
@@ -336,8 +363,7 @@ class MainWindow(QMainWindow):
 
         self.capture_thread = None
         self.analyzer = DistractionAnalyzer()  # Initialize without starting the thread yet
-        self.analyzer.analysis_complete.connect(self.handle_analysis_result)  # Connect the signal
-        self.task_locked = False
+        # self.task_locked = False
 
         # Initialize the notification app
         self.tray_icon = QSystemTrayIcon(self)
@@ -360,17 +386,23 @@ class MainWindow(QMainWindow):
         self.show_stats_button = QPushButton("Show Statistics")
         self.show_stats_button.clicked.connect(self.show_statistics)
         layout.addWidget(self.show_stats_button)
-        
+
     def toggle_monitoring(self):
         if self.start_button.text() == "Start Monitoring":
-            task = self.task_input.text().strip()
-            if not task:
-                self.monitoring_status_label.setText("Status: Please enter a task before starting.")
-                return
+            possible_activities = [a.strip() for a in self.possible_input.text().split(',') if a.strip()]
+            blacklisted_activities = [a.strip() for a in self.blacklisted_input.text().split(',') if a.strip()]
+
+            if not possible_activities:
+                possible_activities = self.default_possible_activities
+                self.possible_input.setText(", ".join(possible_activities))
+            
+            if not blacklisted_activities:
+                blacklisted_activities = self.default_blacklisted_activities
+                self.blacklisted_input.setText(", ".join(blacklisted_activities))
 
             interval = self.interval_spinbox.value()
-            self.analyzer = DistractionAnalyzer(task)  # Initialize with the task
-            self.analyzer.analysis_complete.connect(self.handle_analysis_result)  # Connect the signal
+            self.analyzer = DistractionAnalyzer(possible_activities, blacklisted_activities)
+            self.analyzer.analysis_complete.connect(self.handle_analysis_result)
 
             self.capture_thread = ScreenCaptureThread(interval)
             self.capture_thread.captured.connect(self.process_capture)
@@ -379,6 +411,8 @@ class MainWindow(QMainWindow):
             self.start_button.setText("Stop Monitoring")
             self.monitoring_status_label.setText(f"Status: Monitoring (Interval: {interval}s)")
             self.interval_spinbox.setEnabled(False)
+            self.possible_input.setEnabled(False)
+            self.blacklisted_input.setEnabled(False)
         else:
             self.start_button.setEnabled(False)
             self.monitoring_status_label.setText("Status: Stopping monitoring...")
@@ -396,37 +430,9 @@ class MainWindow(QMainWindow):
         self.start_button.setText("Start Monitoring")
         self.monitoring_status_label.setText("Status: Not monitoring")
         self.interval_spinbox.setEnabled(True)
+        self.possible_input.setEnabled(True)
+        self.blacklisted_input.setEnabled(True)
         self.start_button.setEnabled(True)
-
-    def toggle_task_lock(self):
-        if not self.task_locked:
-            # Lock the task input
-            self.task_input.setEnabled(False)
-            self.lock_task_button.setText("Unlock Task")
-            self.task_locked = True
-
-            # Get the current task from the input field
-            task = self.task_input.text().strip()
-
-            if not task:
-                self.task_lock_status_label.setText("Task Status: Please enter a task before locking.")
-                return
-
-            # Reinitialize the DistractionAnalyzer with the new task
-            self.analyzer = DistractionAnalyzer(task)
-            self.analyzer.analysis_complete.connect(self.handle_analysis_result)  # Reconnect the signal
-
-            # Update status to reflect the task is locked
-            self.task_lock_status_label.setText(f"Task Status: Locked with task '{task}'")
-        else:
-            # Unlock the task input
-            self.task_input.setEnabled(True)
-            self.lock_task_button.setText("Lock Task")
-            self.task_locked = False
-
-            # Optionally, update status to reflect the task is unlocked
-            self.task_lock_status_label.setText("Task Status: Unlocked. You can edit the task now.")
-
 
     def process_capture(self, qimage):
         scaled_pixmap = QPixmap.fromImage(qimage).scaled(300, 200, Qt.AspectRatioMode.KeepAspectRatio)
